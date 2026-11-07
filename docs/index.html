@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<title>Henriks Flugbuch</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Henrik baut Minecraft-Mods, den Messenger BitDM und kleine Werkzeuge.">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+/* Layout: a descent from orbit to a runway. Between projects you fly; inside a project its own world takes over the whole screen. */
+:root{
+  color-scheme:dark;
+  --night:#07061c; --paper:#fff3e2; --ember:#ff5a2a; --gold:#ffc56b;
+  --ok:#4dffa0; --sel:#4fe3ff; --route:#ff5ce1; --caution:#ffb020; --warn:#ff3b3b;
+  --display:"Big Shoulders Display","Arial Narrow",Impact,sans-serif;
+  --body:"B612","Segoe UI",Verdana,sans-serif;
+  --data:"B612 Mono",Consolas,monospace;
+  --pixel:"Pixelify Sans","Courier New",monospace;
+  --dot:"Doto","Courier New",monospace;
+  --chivo:"Chivo Mono",Consolas,monospace;
+  --beam:"Overpass","Segoe UI",sans-serif;
+  /* BitDM "Nocturne", taken from its DESIGN.md */
+  --n-bg:#0b0c12; --n-panel:#161826; --n-line:#3f424d; --n-a0:#d2cefd; --n-a1:#b5abfc; --n-a2:#9184d9; --n-a3:#5d5294; --n-a4:#423a6a; --n-t0:#f3f5fe; --n-t1:#cfd3e5; --n-t2:#9397ab;
+  --fa:#3dff6e; --beam-or:#ff6600;
+  --gut:max(16px,env(safe-area-inset-left,0px)); --gutr:max(16px,env(safe-area-inset-right,0px));
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{background:var(--night);scroll-behavior:auto}
+body{margin:0;color:var(--paper);font:400 17px/1.55 var(--body);overflow-x:clip;background:linear-gradient(#05061a 0,#12145c 15%,#4a1a7a 30%,#c43a5a 44%,#ff6a2b 56%,#ffc56b 64%,#1d7a5f 80%,#170d33 100%)}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--sel);outline-offset:3px}
+button{font:inherit;color:inherit;cursor:pointer}
+#world,#hud{position:fixed;inset:0;width:100vw;height:100lvh;display:block;pointer-events:none}
+#world{z-index:0}
+#hud{z-index:3}
+.no-gl #world{display:none}
+#veil{position:fixed;inset:0;z-index:1;background:#ffd6bd;opacity:0;pointer-events:none}
+.layer{position:fixed;inset:0;z-index:2;opacity:0;visibility:hidden;pointer-events:none;overflow:hidden}
+
+/* top bar: wears whatever world it is in */
+.fma{--bar:rgba(9,6,28,.0);--fg:var(--paper);--acc:var(--route);--line:transparent;position:fixed;z-index:20;top:env(safe-area-inset-top,0px);left:0;right:0;display:flex;align-items:stretch;
+  font:700 13px/1 var(--data);letter-spacing:.06em;color:var(--fg);background:var(--bar);border-bottom:1px solid var(--line);transition:background .4s,color .4s,border-color .4s;
+  padding-left:max(0px,env(safe-area-inset-left,0px));padding-right:max(0px,env(safe-area-inset-right,0px))}
+.fma>*{display:flex;align-items:center;gap:8px;padding:12px 14px;border:0;background:none;white-space:nowrap;text-decoration:none;color:inherit;font:inherit;letter-spacing:inherit}
+.fma .grow{flex:1;min-width:0;overflow:hidden;color:var(--acc)}
+.fma #ap[aria-pressed=true]{color:var(--ok)}
+.fma #ap.off{color:var(--caution)}
+.fma kbd{font:inherit;border:1px solid currentColor;padding:1px 5px;opacity:.75}
+.fma .lang button{border:0;background:none;padding:2px 4px;font:inherit;opacity:.5;color:inherit}
+.fma .lang button[aria-pressed=true]{opacity:1;color:var(--acc)}
+@media(max-width:560px){.fma #ap kbd,.fma .gh,.fma #next{visibility:hidden}.fma .gh,.fma #ap kbd{display:none}.fma>*{padding:12px 9px}}
+body[data-world=transit] .fma{--bar:rgba(9,6,28,.6)}
+body[data-world=bitdm] .fma{--bar:var(--n-bg);--fg:var(--n-t1);--acc:var(--n-a1);--line:var(--n-line);font:600 12px/1 var(--chivo);letter-spacing:.14em}
+body[data-world=lyric] .fma,body[data-world=seaml] .fma,body[data-world=keybd] .fma{--bar:rgba(0,0,0,.72);--fg:#fff;--acc:#55ffff;font:400 16px/1 var(--pixel);letter-spacing:.02em}
+body[data-world=fltas] .fma{--bar:rgba(0,0,0,.25);--fg:var(--fa);--acc:var(--fa);font:400 16px/1 var(--pixel);letter-spacing:.02em}
+body[data-world=earth] .fma{--bar:rgba(0,0,0,.72);--fg:#fff;--acc:var(--beam-or);--line:var(--beam-or);font:800 13px/1 var(--beam);letter-spacing:.04em}
+
+/* flight plan popover */
+.route{position:fixed;z-index:19;right:max(16px,env(safe-area-inset-right,0px));top:52px;width:min(250px,calc(100vw - 32px));font:400 13px/1.25 var(--data);background:rgba(9,6,28,.96);padding:14px;border:1px solid rgba(255,243,226,.25);display:none}
+.route.open{display:block}
+.route ol{list-style:none;margin:0;padding:0;position:relative}
+.route ol::before{content:"";position:absolute;left:4px;top:9px;bottom:9px;width:2px;background:var(--route)}
+.route a{display:grid;grid-template-columns:18px 1fr;align-items:center;gap:0 6px;padding:7px 4px 7px 0;text-decoration:none}
+.route a::before{content:"";width:10px;height:10px;background:var(--night);border:2px solid var(--route);transform:rotate(45deg)}
+.route a.now{color:var(--route)}.route a.now::before{background:var(--route)}
+.route a:hover{color:var(--sel)}
+
+#alert{position:fixed;z-index:30;left:50%;top:20vh;transform:translateX(-50%);font:600 clamp(38px,7vw,88px)/1 var(--pixel);color:var(--warn);text-shadow:3px 3px 0 #300;pointer-events:none;white-space:nowrap}
+#alert.c{color:var(--caution);text-shadow:3px 3px 0 #320}
+#alert:not(.c):not([hidden]){animation:blink 1s steps(2,jump-none) infinite}
+@keyframes blink{50%{opacity:.35}}
+
+main{position:relative;z-index:5}
+.gap{height:115vh}
+.proj{position:relative;padding:48vh var(--gutr) 48vh var(--gut);display:flex;flex-direction:column;gap:clamp(36px,9vh,110px)}
+.proj>*{min-width:0}
+
+/* orbit */
+#orbit{height:125vh;padding:0 var(--gutr) 0 var(--gut)}
+.hero{height:100vh;height:100svh;display:flex;flex-direction:column;justify-content:flex-end;gap:6px;padding-bottom:9vh;max-width:1400px;margin-inline:auto}
+.hero h1{margin:0;font:900 clamp(56px,7.4vw,116px)/.9 var(--display);text-transform:uppercase;letter-spacing:.01em;text-shadow:0 3px 24px #0009}
+.hero p{margin:0;font-size:clamp(17px,1.5vw,21px);text-shadow:0 1px 10px #000c}
+.hero small{font:400 13px/1.4 var(--data);opacity:.8;margin-top:12px}
+
+/* ===== BitDM: Nocturne device front ===== */
+#w-bitdm{background:var(--n-bg) radial-gradient(circle at center,var(--n-a4) 1px,transparent 1.6px) 0 0/14px 14px}
+#w-bitdm::after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at 30% 35%,transparent 10%,var(--n-bg) 72%)}
+#bitdm{color:var(--n-t1);font:400 16px/1.6 var(--chivo)}
+.nocturne{max-width:1240px;margin-inline:auto;width:100%;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:clamp(30px,5vw,80px);align-items:start}
+.n-col{display:flex;flex-direction:column;gap:16vh}
+.n-eye{margin:0 0 14px;font:600 11px/1.3 var(--chivo);letter-spacing:.16em;color:var(--n-a2);text-transform:uppercase}
+.n-h{margin:0;font:900 clamp(44px,6.6vw,92px)/1.02 var(--dot);text-transform:uppercase;color:var(--n-t0);letter-spacing:.02em}
+.n-lead{margin:20px 0 0;max-width:30em;color:var(--n-t1);font-size:17px}
+.module{position:relative;background:var(--n-panel);border:1px solid var(--n-line);border-radius:14px;padding:20px;box-shadow:0 14px 34px #0007}
+.module>h3{margin:0 0 14px;font:600 11px/1 var(--chivo);letter-spacing:.14em;color:var(--n-a2);text-transform:uppercase;display:flex;justify-content:space-between;gap:12px}
+#addr{margin:0 0 16px;font:900 clamp(24px,3vw,38px)/1.16 var(--dot);color:var(--n-a0);letter-spacing:.02em;display:flex;flex-wrap:wrap;gap:0 .55em;text-shadow:0 0 12px rgba(181,171,252,.45)}
+#addr em{font-style:normal;color:var(--n-a2)}
+.n-btn{display:inline-flex;font:600 12px/1 var(--chivo);letter-spacing:.12em;text-transform:uppercase;padding:13px 17px;border-radius:8px;border:1px solid var(--n-a3);color:var(--n-a0);background:var(--n-a4);text-decoration:none}
+.n-btn.ghost{background:none;border-color:var(--n-line);color:var(--n-t1)}
+.n-btn:hover{border-color:var(--n-a1);color:#fff}
+.n-row{display:flex;flex-wrap:wrap;gap:10px;margin:0;padding:0;list-style:none}
+.lamps{list-style:none;margin:0 0 18px;padding:0;display:grid;gap:11px;font:600 12px/1.35 var(--chivo);letter-spacing:.08em;text-transform:uppercase;color:var(--n-t1)}
+.lamps li{display:grid;grid-template-columns:14px 1fr;gap:12px;align-items:center}
+.lamps i{width:11px;height:11px;border-radius:99px;background:var(--n-a1);box-shadow:0 0 9px var(--n-a1)}
+.lamps li.dark i{background:#20212c;box-shadow:inset 0 0 0 1px var(--n-line)}
+.lamps li.dark{color:var(--n-t2)}
+.chat{position:sticky;top:96px}
+.chat header{display:flex;align-items:center;gap:12px;padding-bottom:14px;border-bottom:1px solid var(--n-line);margin-bottom:14px;font:600 13px/1.3 var(--chivo);color:var(--n-t0)}
+.chat header img{width:38px;height:38px;border-radius:9px}
+.chat header small{display:block;font-size:10px;letter-spacing:.14em;color:var(--n-a2)}
+.chat .note{text-align:center;font-size:11px;letter-spacing:.06em;color:var(--n-t2);margin:0 0 12px}
+.msgs{display:flex;flex-direction:column;gap:9px;margin:0;padding:0;list-style:none;font:400 14px/1.4 var(--body)}
+.msgs li{max-width:82%;padding:10px 13px;background:#20222f;border-radius:10px;color:var(--n-t0)}
+.msgs li.me{align-self:flex-end;background:var(--n-a4)}
+.msgs small{display:block;margin-top:3px;font:400 10px/1 var(--chivo);color:var(--n-t2);text-align:right}
+.msgs b{font:600 9px/1 var(--chivo);letter-spacing:.12em;border:1px solid var(--n-a3);color:var(--n-a1);padding:2px 4px;border-radius:3px;margin-right:6px}
+@media(max-width:860px){.nocturne{grid-template-columns:minmax(0,1fr)}.n-col{gap:12vh}.chat{position:static}}
+
+/* ===== Minecraft surfaces ===== */
+.mc{--stone:none;display:block;width:100%;text-align:center;padding:9px 10px;font:400 clamp(15px,1.3vw,18px)/1.2 var(--pixel);color:#fff;text-shadow:2px 2px 0 #3a3a3a;text-decoration:none;background:#6f6f6f var(--stone);background-size:64px 64px;image-rendering:pixelated;border:2px solid #000;box-shadow:inset 2px 2px 0 #a8a8a8,inset -2px -3px 0 #4a4a4a}
+.mc:hover,.mc:focus-visible{background-color:#7f89c4;box-shadow:inset 2px 2px 0 #c4ccff,inset -2px -3px 0 #4f5a9a;color:#ffffa0}
+.mcsh{font-family:var(--pixel);color:#fff;text-shadow:3px 3px 0 #3f3f3f}
+
+/* ===== Lyrics in the Sky ===== */
+#w-lyric{background:#000}
+#w-lyric video{position:absolute;left:0;top:40px;width:100%;height:calc(100% - 40px);object-fit:cover;background:#1c0f1c}
+#w-lyric::after{content:"";position:absolute;inset:0;background:linear-gradient(transparent 60%,rgba(10,6,20,.5))}
+.mc[aria-pressed=true]{color:#ffffa0}
+#lyric{min-height:230vh;justify-content:flex-end}
+.mcpanel{width:min(860px,100%);margin-inline:auto;background:rgba(10,10,16,.86);border:1px solid #2b2b33;padding:clamp(14px,2vw,24px)}
+.mcpanel h2{margin:0 0 4px;text-align:center;font:400 clamp(24px,3vw,36px)/1.15 var(--pixel);color:#55ffff;text-shadow:3px 3px 0 #153f3f}
+.mcpanel>p{margin:0 0 14px;text-align:center;color:#c8c8c8;font:400 clamp(15px,1.4vw,18px)/1.3 var(--pixel);text-shadow:2px 2px 0 #333}
+.mcgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+@media(max-width:620px){.mcgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* ===== FlightAssistant ===== */
+#fltas{min-height:240vh;align-items:center;text-align:center;color:var(--fa);font:400 clamp(17px,1.6vw,22px)/1.35 var(--pixel);padding-inline:clamp(70px,18vw,300px)}
+#fltas img{display:block;width:min(560px,100%);height:auto;image-rendering:pixelated;filter:drop-shadow(0 0 10px #000a)}
+#fltas h2{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+#fltas p{margin:0;max-width:30em;text-shadow:0 0 6px #000,0 0 2px #000}
+#fltas .credit{color:#fff;opacity:.85;font-size:.85em}
+.boxes{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;list-style:none;margin:0;padding:0}
+.fbox{display:inline-block;padding:7px 12px;border:2px solid var(--fa);color:var(--fa);background:rgba(0,0,0,.45);text-decoration:none;font:inherit}
+.fbox:hover{background:var(--fa);color:#000}
+.fbox.w{border-color:var(--warn);color:var(--warn)}.fbox.w:hover{background:var(--warn);color:#000}
+@media(max-width:560px){#fltas{padding-inline:58px}}
+
+/* ===== Seamless Loading ===== */
+#w-seaml canvas{position:absolute;inset:0;width:100%;height:100%}
+#seaml{min-height:210vh;padding-top:62vh;align-items:flex-start;max-width:1400px;margin-inline:auto;width:100%}
+#seaml h2{margin:0;font:600 clamp(44px,7vw,104px)/1 var(--pixel)}
+#seaml p{margin:0;max-width:27em;font:400 clamp(18px,1.7vw,24px)/1.3 var(--pixel);color:#fff;text-shadow:2px 2px 0 #222}
+#loadtxt{position:fixed;z-index:6;left:50%;bottom:9vh;transform:translateX(-50%);font:400 clamp(16px,1.6vw,21px)/1 var(--pixel);text-shadow:2px 2px 0 #222;color:#fff;white-space:nowrap}
+.mcrow{display:flex;flex-wrap:wrap;gap:8px;width:min(420px,100%)}
+.mcrow .mc{flex:1 1 170px;width:auto}
+
+/* ===== SaveMyKeybinds ===== */
+#w-keybd{background:rgba(0,0,0,.5);-webkit-backdrop-filter:blur(7px);backdrop-filter:blur(7px)}
+#keybd{min-height:175vh;align-items:center}
+.keys{width:min(720px,100%)}
+.keys h2{margin:0 0 2px;text-align:center;font:400 clamp(22px,2.4vw,30px)/1.2 var(--pixel);color:#fff;text-shadow:3px 3px 0 #3f3f3f}
+.keys>p{margin:0 0 14px;text-align:center;font:400 clamp(15px,1.4vw,18px)/1.3 var(--pixel);color:#c8c8c8;text-shadow:2px 2px 0 #333}
+.klist{list-style:none;margin:0;padding:12px clamp(10px,3vw,30px);background:rgba(0,0,0,.6);border-block:2px solid #000;display:grid;gap:5px}
+.klist li{display:grid;grid-template-columns:1fr minmax(120px,190px) 70px;gap:6px;align-items:center;font:400 clamp(15px,1.4vw,18px)/1.2 var(--pixel);color:#fff;text-shadow:2px 2px 0 #3a3a3a}
+.klist li .wait{color:#ffff55}
+.klist li.real>span{color:#55ffff}
+.keys .foot{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}
+#kfile{display:block;text-align:center;margin-top:10px;font:400 15px/1.2 var(--pixel);color:#aaa;text-shadow:2px 2px 0 #222}
+@media(max-width:560px){.klist li{grid-template-columns:1fr 112px}.klist li .rs{display:none}.keys .foot{grid-template-columns:1fr}}
+
+/* ===== BeamNG.Earth ===== */
+#w-earth img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#w-earth::after{content:"";position:absolute;inset:0;background:linear-gradient(rgba(0,0,0,.2),transparent 30%,transparent 55%,rgba(0,0,0,.65))}
+#earth{min-height:260vh;font:400 18px/1.45 var(--beam);color:#fff;gap:48vh;max-width:1400px;margin-inline:auto;width:100%}
+.b-title h2{margin:0;font:800 clamp(52px,9.4vw,150px)/.96 var(--beam);letter-spacing:-.025em;text-shadow:0 3px 30px #000b}
+.b-title h2 b{font-weight:300}
+.b-title p{margin:12px 0 0;font:300 clamp(19px,2vw,28px)/1.3 var(--beam);max-width:26em;text-shadow:0 1px 12px #000c}
+.b-tag{display:inline-block;margin-bottom:10px;background:var(--beam-or);color:#000;font:800 13px/1 var(--beam);padding:6px 8px 4px;letter-spacing:.03em}
+.b-panels{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.b-panels a{display:flex;flex-direction:column;gap:10px;padding:16px;background:rgba(0,0,0,.76);border-top:3px solid var(--beam-or);text-decoration:none;font:400 16px/1.35 var(--beam)}
+.b-panels a:hover{background:rgba(30,16,4,.9)}
+.b-panels strong{font-weight:800;font-size:19px}
+.b-panels small{font:800 12px/1 var(--beam);letter-spacing:.05em;color:#ffb27a}
+.b-panels small.m{color:#7dffb0}
+.b-panels svg{width:100%;height:58px;display:block}
+.b-link{display:inline-flex;background:var(--beam-or);color:#000;padding:13px 18px 10px;font:800 15px/1 var(--beam);text-decoration:none}
+.b-link:hover{background:#fff}
+.b-note{margin:10px 0 0;font-size:13px;opacity:.85;text-shadow:0 1px 6px #000}
+@media(max-width:820px){.b-panels{grid-template-columns:minmax(0,1fr)}#earth{gap:30vh}}
+
+/* ===== Airport ===== */
+#terminal{padding:66vh var(--gutr) 0 var(--gut);display:flex;flex-direction:column;gap:30px;max-width:1240px;margin-inline:auto}
+#terminal h2{margin:0;font:900 clamp(52px,8vw,110px)/.9 var(--display);text-transform:uppercase;text-shadow:0 4px 20px #0009}
+.rate{margin:0;font:400 14px/1.5 var(--data);max-width:36em;text-shadow:0 1px 5px #000c}
+.rate b{display:block;font:800 26px/1.15 var(--display);letter-spacing:.02em;text-transform:uppercase;color:var(--gold)}
+.board{background:#0a0a0d;border:6px solid #1d1b22;padding:clamp(12px,2vw,24px);box-shadow:0 18px 50px #0009}
+.board h3{margin:0 0 12px;font:800 clamp(26px,3.6vw,40px)/1 var(--display);letter-spacing:.06em;color:var(--gold);text-transform:uppercase}
+.board .wrap{overflow-x:auto}
+.board table{border-collapse:separate;border-spacing:0 5px;width:100%;min-width:800px;font:700 12.5px/1 var(--data)}
+.board th{text-align:left;font:400 11px/1 var(--data);letter-spacing:.1em;opacity:.65;padding:0 12px 3px 0}
+.board td{padding:0 12px 0 0;vertical-align:middle;white-space:nowrap}
+.board td.what{font-weight:400;white-space:normal;font-size:12.5px;line-height:1.3;color:#d9d3c8;min-width:170px}
+.board a{text-decoration:none;display:inline-flex}
+.board a:hover .fl{background:#3a3640}
+.fl{display:inline-block;min-width:.86em;padding:4px 0;text-align:center;background:#1c1b21;color:var(--paper);margin-right:1px;border-bottom:1px solid #000}
+.st-ok .fl{color:var(--ok)}.st-wip .fl{color:var(--caution)}
+.btnrow{display:flex;flex-wrap:wrap;gap:10px}
+.btn{display:inline-flex;font:700 14px/1 var(--data);padding:12px 15px;background:none;border:2px solid var(--paper);color:var(--paper);text-decoration:none}
+.btn:hover{background:var(--paper);color:#170d33}
+.btn.go{background:var(--ember);border-color:var(--ember);color:#1c0a10}
+@media(max-width:720px){.board table{min-width:0;display:block}.board thead{display:none}.board tbody,.board tr,.board td{display:block}.board tr{padding:9px 0;border-bottom:1px solid #2a2830}.board td{padding:3px 0}.board td.lang,.board td.date{display:none}.board .fl{font-size:11.5px}}
+footer{font:400 12px/1.6 var(--data);padding-block:6px 40px;max-width:84ch;text-shadow:0 1px 4px #000}
+footer p{margin:0 0 .6em}
+@media(prefers-reduced-motion:reduce){#alert:not(.c):not([hidden]){animation:none}}
+</style>
+</head>
+<body>
+
+
+<canvas id="world" aria-hidden="true"></canvas>
+<div id="veil" aria-hidden="true"></div>
+<div class="layer" id="w-bitdm" aria-hidden="true"></div>
+<div class="layer" id="w-lyric" aria-hidden="true">
+  <video id="lyv" src="assets/lyrics-preview.mp4" poster="assets/lyrics-poster.jpg" muted playsinline preload="metadata"></video>
+</div>
+<div class="layer" id="w-seaml" aria-hidden="true"><canvas id="chunks"></canvas></div>
+<div class="layer" id="w-keybd" aria-hidden="true"></div>
+<div class="layer" id="w-earth" aria-hidden="true">
+  <img id="e1" src="assets/beamng-evening.webp" alt=""><img id="e2" src="assets/beamng-city.webp" alt="" style="opacity:0">
+</div>
+<canvas id="hud" aria-hidden="true"></canvas>
+<div id="alert" hidden aria-hidden="true"></div>
+<div id="loadtxt" hidden aria-hidden="true"></div>
+
+<header class="fma">
+  <a href="#orbit" data-go="orbit">HENRIK</a>
+  <span class="grow" id="next"></span>
+  <button id="ap" type="button" aria-pressed="false"><span>AUTOPILOT</span> <kbd id="apk">A</kbd></button>
+  <button id="planbtn" type="button" aria-expanded="false" aria-controls="route"><span data-en="PLAN">PLAN</span></button>
+  <a class="gh" href="https://github.com/Henner4746">GITHUB</a>
+  <span class="lang"><button type="button" data-l="de" aria-pressed="true">DE</button><button type="button" data-l="en" aria-pressed="false">EN</button></span>
+</header>
+
+<nav class="route" id="route" aria-label="Flugplan">
+  <ol>
+    <li><a href="#orbit" data-go="orbit">Orbit</a></li>
+    <li><a href="#bitdm" data-go="bitdm">BitDM</a></li>
+    <li><a href="#lyric" data-go="lyric">Lyrics in the Sky</a></li>
+    <li><a href="#fltas" data-go="fltas">FlightAssistant</a></li>
+    <li><a href="#seaml" data-go="seaml">Seamless Loading</a></li>
+    <li><a href="#keybd" data-go="keybd">SaveMyKeybinds</a></li>
+    <li><a href="#earth" data-go="earth">BeamNG.Earth</a></li>
+    <li><a href="#terminal" data-go="terminal" data-en="Tools">Werkzeuge</a></li>
+  </ol>
+</nav>
+
+<main>
+  <section id="orbit" data-alt="400000" data-wp="ORBIT">
+    <div class="hero">
+      <h1>Henrik</h1>
+      <p data-en="Mods, a messenger and small tools.">Mods, ein Messenger und kleine Werkzeuge.</p>
+      <small data-en="Scroll to descend">Scrollen zum Sinkflug</small>
+    </div>
+  </section>
+  <div class="gap"></div>
+
+  <section class="proj" id="bitdm" data-alt="100000" data-wp="BITDM" data-layer="w-bitdm">
+    <div class="nocturne">
+      <div class="n-col">
+        <div>
+          <p class="n-eye" data-en="Encrypted messenger">Verschlüsselter Messenger</p>
+          <h2 class="n-h" data-en="BitDM: no phone number">BitDM: ohne Telefon&shy;nummer</h2>
+          <p class="n-lead" data-en="No number, no e-mail, no account. Your address is your key.">Keine Nummer, keine E-Mail, kein Konto. Deine Adresse ist dein Schlüssel.</p>
+        </div>
+        <div class="module">
+          <h3><span data-en="Your address">Deine Adresse</span><span data-en="56 characters">56 Zeichen</span></h3>
+          <p id="addr" aria-label="Beispieladresse"></p>
+          <button class="n-btn" id="regen" type="button" data-en="New key">Neuer Schlüssel</button>
+          <p class="n-eye" style="margin:14px 0 0" data-en="Example, made in your browser, real format">Beispiel, in deinem Browser erzeugt, echtes Format</p>
+        </div>
+        <div class="module">
+          <h3><span>Status</span><span>v2.0.1</span></h3>
+          <ul class="lamps">
+            <li><i></i><span data-en="End-to-end encrypted, Signal protocol">Ende-zu-Ende, Signal-Protokoll</span></li>
+            <li><i></i><span data-en="Bluetooth with no network">Bluetooth ohne Netz</span></li>
+            <li><i></i><span data-en="Open source, AGPL-3.0">Offener Code, AGPL-3.0</span></li>
+            <li><i></i>Android · Windows · Linux · Web</li>
+            <li class="dark"><i></i><span data-en="Independent audit: not yet">Unabhängiges Audit: noch nicht</span></li>
+          </ul>
+          <ul class="n-row">
+            <li><a class="n-btn" href="https://bitdm.net">bitdm.net</a></li>
+            <li><a class="n-btn ghost" href="https://github.com/Henner4746/BitDM">GitHub</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="module chat" aria-label="Nachbau eines Chats">
+        <h3><span data-en="A chat in the app">Ein Chat in der App</span><span data-en="Replica">Nachbau</span></h3>
+        <header><img src="assets/bitdm-zeichen.svg" alt=""><span>UBLF…5DR5<small data-en="ENCRYPTED">VERSCHLÜSSELT</small></span></header>
+        <p class="note" data-en="End-to-end encrypted">Ende-zu-Ende verschlüsselt</p>
+        <ul class="msgs">
+          <li data-en="We're at the hut. Where are you?<small>14:02</small>">Wir sind an der Hütte. Wo seid ihr?<small>14:02</small></li>
+          <li class="me" data-en="Half an hour to go. Hardly any signal here.<small>14:03</small>">Noch eine halbe Stunde. Hier ist kaum Netz.<small>14:03</small></li>
+          <li data-en="We can already see you from the window.<small><b>DIRECT</b>14:29</small>">Wir sehen euch schon vom Fenster aus.<small><b>DIREKT</b>14:29</small></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+  <div class="gap"></div>
+
+  <section class="proj" id="lyric" data-alt="11500" data-wp="LYRIC" data-layer="w-lyric">
+    <div class="mcpanel">
+      <h2>Lyrics in the Sky</h2>
+      <p data-en="The music on your PC, word by word in the Minecraft sky. That's the real mod in the video.">Die Musik von deinem PC, Wort für Wort am Minecraft-Himmel. Im Video läuft die echte Mod.</p>
+      <div class="mcgrid">
+        <button class="mc" data-chap="0" type="button" data-en="In the sky">Am Himmel</button>
+        <button class="mc" data-chap="1" type="button" data-en="Around you">Um dich herum</button>
+        <button class="mc" data-chap="2" type="button" data-en="At night">Bei Nacht</button>
+        <button class="mc" id="o-vid" type="button"></button>
+        <a class="mc" href="https://www.curseforge.com/minecraft/mc-mods/lyrics-in-the-sky">CurseForge</a>
+        <a class="mc" href="https://github.com/Henner4746/lyrics-in-the-sky">GitHub</a>
+      </div>
+    </div>
+  </section>
+  <div class="gap"></div>
+
+  <section class="proj" id="fltas" data-alt="5200" data-wp="FLTAS">
+    <h2>FlightAssistant Continued</h2>
+    <img src="assets/fa-logo.png" width="1920" height="480" alt="Flight Assistant">
+    <p data-en="This is its HUD. Flight data, safety alerts and an autopilot for the elytra. Move your mouse.">Das ist sein HUD. Flugdaten, Warnungen und ein Autopilot für die Elytren. Beweg die Maus.</p>
+    <ul class="boxes">
+      <li><button class="fbox w" id="gpws" type="button" data-en="Test the alert">Warnung testen</button></li>
+      <li><a class="fbox" href="https://modrinth.com/mod/flightassistant-continued">Modrinth · 807</a></li>
+      <li><a class="fbox" href="https://github.com/Henner4746/FlightAssistant">GitHub</a></li>
+    </ul>
+    <p class="credit" data-en="Original by Octol1ttle. I keep this unofficial fork running for 26.2 and 26.3.">Original von Octol1ttle. Ich halte diesen inoffiziellen Fork für 26.2 und 26.3 am Laufen.</p>
+  </section>
+  <div class="gap"></div>
+
+  <section class="proj" id="seaml" data-alt="1500" data-wp="SEAML" data-layer="w-seaml">
+    <h2 class="mcsh">Seamless<br>Loading Screen</h2>
+    <p data-en="Your last screenshot instead of a loading screen. Chunk by chunk it turns into the live world. Keep scrolling.">Dein letzter Screenshot statt Ladebildschirm. Chunk für Chunk wird er zur echten Welt. Scroll weiter.</p>
+    <div class="mcrow">
+      <a class="mc" href="https://github.com/Henner4746/Seamless-Loading-Screen">GitHub · v2.3.0</a>
+    </div>
+    <p style="font-size:16px;opacity:.85" data-en="Fork for 26.2 and 26.3. Original by Minenash.">Fork für 26.2 und 26.3. Original von Minenash.</p>
+  </section>
+  <div class="gap" style="height:60vh"></div>
+
+  <section class="proj" id="keybd" data-alt="900" data-wp="KEYBD" data-layer="w-keybd">
+    <div class="keys">
+      <h2>SaveMyKeybinds</h2>
+      <p data-en="Key bindings as presets. Click a key, it really works: Autopilot is this page's key.">Tastenbelegungen als Presets. Klick eine Taste, das funktioniert wirklich: Autopilot ist die Taste dieser Seite.</p>
+      <ul class="klist" id="klist"></ul>
+      <div class="foot">
+        <button class="mc" id="k-save" type="button" data-en="Save preset">Preset speichern</button>
+        <button class="mc" id="k-load" type="button" data-en="Load preset">Preset laden</button>
+        <a class="mc" href="https://github.com/Henner4746/SaveMyKeybinds">GitHub · v1.2.0</a>
+      </div>
+      <span id="kfile"></span>
+      <span id="kcred" style="display:block;text-align:center;font:400 15px/1.3 var(--pixel);color:#ddd;text-shadow:2px 2px 0 #222" data-en="Fork for 26.2 and 26.3. Original by MisterCheezeCake.">Fork für 26.2 und 26.3. Original von MisterCheezeCake.</span>
+    </div>
+  </section>
+  <div class="gap" style="height:60vh"></div>
+
+  <section class="proj" id="earth" data-alt="420" data-wp="EARTH" data-layer="w-earth">
+    <div class="b-title">
+      <span class="b-tag" data-en="PROJECT BY TECNAGAMER · I CONTRIBUTE">PROJEKT VON TECNAGAMER · ICH ARBEITE MIT</span>
+      <h2>BeamNG<b>.Earth</b></h2>
+      <p data-en="The whole planet at 1:1 scale in BeamNG.drive, from real elevation data and satellite images.">Der ganze Planet im Maßstab 1:1 in BeamNG.drive, aus echten Höhendaten und Satellitenbildern.</p>
+    </div>
+    <div>
+      <span class="b-tag" data-en="MY PULL REQUESTS">MEINE PULL REQUESTS</span>
+      <div class="b-panels">
+        <a href="https://github.com/TecnaGamer/BeamNG.Earth/pull/738"><small class="m">#738 · MERGED</small><strong data-en="Map search">Kartensuche</strong><span data-en="Several sources ranked together, streets on Enter.">Mehrere Quellen zusammen gewertet, Straßen per Enter.</span></a>
+        <a href="https://github.com/TecnaGamer/BeamNG.Earth/pull/820"><small>#820 · OPEN</small><strong data-en="Roof shapes">Dachformen</strong>
+          <svg viewBox="0 0 300 58" fill="none" stroke="#ff6600" stroke-width="3" aria-hidden="true"><path d="M4 50V32L50 14V50Z"/><path d="M64 50V30L74 22L84 12H106L116 22L126 30V50Z"/><path d="M138 50V32H186V50M138 32L162 10L186 32"/><path d="M198 50V34L206 16H236L244 34V50M198 34H244"/><path d="M256 50V32L264 18L277 10L290 18L298 32V50"/></svg>
+          <span data-en="Lean-to, half-hipped, pyramid, mansard and gambrel, as mapped.">Pult, Krüppelwalm, Zelt, Mansarde und Gambrel, wie kartiert.</span></a>
+        <a href="https://github.com/TecnaGamer/BeamNG.Earth/pull/872"><small>#872 · OPEN</small><strong data-en="Germany in LoD2">Deutschland in LoD2</strong><span data-en="Measured roof shapes and heights from the states' open models.">Gemessene Dachformen und Höhen aus den offenen Modellen der Länder.</span></a>
+      </div>
+      <p style="margin:14px 0 0"><a class="b-link" href="https://github.com/TecnaGamer/BeamNG.Earth" data-en="Project on GitHub · 1,874 stars">Projekt auf GitHub · 1.874 Sterne</a></p>
+      <p class="b-note" data-en="Screenshots from the project docs (MIT).">Screenshots aus der Projektdoku (MIT).</p>
+    </div>
+  </section>
+  <div class="gap" style="height:150vh"></div>
+
+  <section id="terminal" data-alt="0" data-wp="RWY">
+    <div>
+      <h2 data-en="Landed">Gelandet</h2>
+      <p class="rate" id="rate" aria-live="polite"><b data-en="Welcome on the ground">Willkommen am Boden</b></p>
+    </div>
+    <div class="board">
+      <h3 data-en="Departures: the small tools">Abflüge: die kleinen Werkzeuge</h3>
+      <div class="wrap" tabindex="0" role="region" aria-label="Werkzeuge">
+        <table>
+          <thead><tr><th>REPO</th><th data-en="WHAT IT DOES">WAS ES TUT</th><th data-en="LANGUAGE">SPRACHE</th><th data-en="STATUS">STAND</th><th data-en="LAST PUSH">ZULETZT</th></tr></thead>
+          <tbody id="fids"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="btnrow">
+      <button class="btn go" id="again" type="button" data-en="Back to orbit">Zurück in den Orbit</button>
+      <a class="btn" href="https://github.com/Henner4746" data-en="All repos on GitHub">Alle Repos auf GitHub</a>
+    </div>
+    <footer>
+      <p data-en="Figures as of 7 November 2026. The planet's blocks are coloured by real climate zones: Beck et al. (2023), Scientific Data 10, 724, CC BY 4.0, via BeamNG.Earth. The block mountains are made up. Fonts: B612 (Airbus), Doto, Chivo Mono, Pixelify Sans, Overpass. 3D: three.js.">Zahlen vom 7. November 2026. Die Blöcke des Planeten sind nach echten Klimazonen gefärbt: Beck et al. (2023), Scientific Data 10, 724, CC BY 4.0, über BeamNG.Earth. Die Block-Berge sind erfunden. Schriften: B612 (Airbus), Doto, Chivo Mono, Pixelify Sans, Overpass. 3D: three.js.</p>
+    </footer>
+  </section>
+</main>
+
+<script src="vendor/three.min.js"></script>
+<script src="app.js"></script>
+
+</body>
+</html>
